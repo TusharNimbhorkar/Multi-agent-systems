@@ -549,8 +549,7 @@ end
 to send-message [to_bus_id message]
   ifelse is-number? to_bus_id = false or count buses with [bus_id = to_bus_id] <= 0 [
     show (word "WARNING: send-message                  :" "bus does not exist: " to_bus_id)
-  ]
-  [
+  ][
     ask buses with [bus_id = to_bus_id] [
       let sender 0
       ask myself [
