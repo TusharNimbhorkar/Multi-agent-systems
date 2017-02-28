@@ -190,8 +190,13 @@ to-report decode[message sender]
       set actions remove-item 0 message;need to indicate that this is to do with passngers
       ;pass to sub method that carries out these actions
     ][;path
+    
       set actions remove-item 0 message;
       table:put path_list sender actions
+      
+      cross_p actions
+    
+    
     ]  
     ;set actions message
   ]
@@ -304,7 +309,7 @@ to communication
   
   ;communicate path to new buses
   foreach bus_ids [
-    if current_id != ? and table:has-key? notified_list ?[
+    if current_id != ? and not table:has-key? notified_list ?[
       show(word "notification to " ? " contains " notified_list )
       table:put notified_list ? "notified"
       let message_list fput "inform" (fput "path" path)
@@ -320,10 +325,15 @@ to communication
   ]
 end
 
+
+
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
   check_path
+  ;let x union [1 2 3] [4 5 5]
+  show(word "join" x)
+  ;cross_p
   show(word "Path " path)
   if (ticks mod 100) = 0 and count buses < 3
   [add-bus 3  ]
@@ -333,7 +343,7 @@ to execute-actions
     let message_ticks item 0 ?
     let sender item 1 ?
     let message item 2 ?
-    let message_actions (decode message, sender)
+    let message_actions (decode message sender)
     ;show(word "Message_ticks " message_ticks " sender "sender " message actions " message_actions " receiving " bus_id)
     ;show(word "Current passngers " current_p_station_list)
     ;foreach message_actions [
@@ -343,5 +353,33 @@ to execute-actions
   ] 
   
   communication
+  
+end
+
+to cross_p [path2]
+  
+  let current_id1 bus_id
+  let bus_ids1 [bus_id] of buses
+  let len length bus_ids1
+  show(word "cross_path " path2)
+  let x path
+  show( word "reduced" intersect x path2 )
+  
+  
+  
+
+
+
+end
+to-report intersect [a b]
+   report (filter [ member? ? b ] a)
+end
+
+to-report union [a b]
+  foreach b [ set a lput ? a ]
+  
+  let mylist remove-duplicates a
+  report mylist
+
   
 end
