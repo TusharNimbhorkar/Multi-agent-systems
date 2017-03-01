@@ -192,6 +192,13 @@ to-report decode[message sender]
     ][;path
       set actions remove-item 0 message;
       table:put path_list sender actions
+      set actions but-first actions
+      ;show(word "actions" actions)
+      let returned_list []
+      set returned_list cross_p actions
+      show(word"--------------path" path "---------------action" actions)
+      show(word "------------------RETURNED LIST" returned_list)
+    
     ]  
     ;set actions message
   ]
@@ -405,6 +412,8 @@ to execute-actions
     let sender item 1 ?
     let message item 2 ?
     let message_actions (decode message sender)
+    set inbox but-first inbox
+    
     ;show(word "Message_ticks " message_ticks " sender "sender " message actions " message_actions " receiving " bus_id)
     ;show(word "Current passngers " current_p_station_list)
     ;foreach message_actions [
@@ -414,5 +423,55 @@ to execute-actions
   ] 
   
   communication
+  
+end
+
+
+
+;to report
+to-report cross_p [path2]
+  
+  
+  ;let list11 [[1 2 3] [2 3 4]]
+  ;show(word "temporary" list11)
+  
+  let current_id1 bus_id
+  let bus_ids1 [bus_id] of buses
+  let len length bus_ids1
+  ;show(word "cross_path " path2)
+  let x path
+  let reduced_list intersect x path2
+  ;show( word "reduced" intersect x path2 )
+  
+  let len_rl length reduced_list
+  
+  ifelse len_rl > 0 [
+    ;show (word "union " union x path2)
+    let union_list union x path2
+    let reporting_list []
+    ;let reporting_list [reduced_list union_list]
+    set reporting_list lput reduced_list reporting_list
+    set reporting_list lput union_list reporting_list
+    
+    ;show(word "combined_list" reporting_list)
+    report reporting_list
+  ][ let empty_list [[][]]
+  report empty_list]
+end
+
+
+to-report intersect [a b]
+   report (filter [ member? ? b ] a)
+end
+
+
+to-report union [a b]
+  
+  
+  foreach b [ set a lput ? a ]
+  
+  let mylist remove-duplicates a
+  report mylist
+
   
 end
