@@ -228,39 +228,110 @@ to-report find_route
   let biggest_passengers []
   let biggest_positions []
   let station_id 0
-  while[station_id != 24]
-  [ 
-     let p_list table:get schedule station_id
-     let biggest max p_list
-     set biggest_positions lput (position biggest p_list) biggest_passengers
-     set biggest_passengers lput biggest biggest_passengers
-     ;if biggest already taken then remove from list and take the next biggest
-     ;
+  let found false
+  
+  let i 0
+  let j 0
+  
+  let sorted_list []
+  let tmp_list []
+  ;combine schedule
+  while[ i < 24][
+    set j 0
+    while[ j < 24][
+     set tmp_list (list i j (item j (table:get schedule i )))
+     set sorted_list lput (tmp_list) sorted_list
+     set j j + 1 
+    ]
+    set i i + 1
+  ]
+  show (word "sorted_list " sorted_list)
+  set sorted_list (sort-by [item 2 ?1 > item 2 ?2] sorted_list)
+  let sort_counter 0
+  let bus_ids (list buses)
+  
+  while[sort_counter < length(sorted_list)][
+    let potential_path item sort_counter sorted_list
+    let path_found_check false
+    let path_counter 0
+    while[path_counter < length(bus_ids) and not path_found_check][
+      if table:has-key? path_list (item path_counter bus_ids) [ 
+        let bus_path (table:get path_list (item path_counter bus_ids))
+        let first_s item 0 bus_path
+        let last_s item (length (bus_path) - 1) bus_path
+        if (first_s != item 0 potential_path and last_s != item 1 potential_path) and (first_s != item 1 potential_path and last_s != item 0 potential_path) [
+          set path_found_check true
+        ]
+      ]
+      set path_counter path_counter + 1
+    ;get first path
+    ;loop through existing paths
+    ;if take path
+      ;break and delete take next path
+    ;if break is not set
+      ;take path
+    ]
+    
+    if not path_found_check [
+      report s_path (item 0 potential_path) (item 1 potential_path)
+    ]
         
-     set station_id (station_id + 1)  
-     ;show(word "biggest " biggest)
+    set sort_counter sort_counter + 1 
   ]
   
-  let p_position position(max biggest_passengers) biggest_passengers
-  let first_station item (p_position) biggest_positions
-  let new_position p_position
+  ;no path found that wasn't taken
+   report s_path (item 0 (item 0 sorted_list)) (item 1 (item 0 sorted_list ))
   
-  while [first_station = item (new_position) biggest_positions][
-      show(word "1st " (item (p_position) biggest_positions) "  2nd " (item (new_position) biggest_positions))
-      show(word "new " new_position "  and old " p_position)
-      set biggest_positions remove-item new_position biggest_positions
-      set biggest_passengers remove-item new_position biggest_passengers
-      set new_position position(max biggest_passengers) biggest_passengers
-  ]
-  show(word "found 1st " first_station "  2nd " (item (new_position) biggest_positions))
-  show(word "found " new_position )  
-  let second_station item (new_position) biggest_positions
-  show(word "first " first_station " second " second_station)
   
-  report s_path second_station first_station;report filter [item ? numbers = biggest] 
-  ;              n-values (length numbers) [?]
+  ;while[station_id != 24]
+  ;[ 
+  ;  let p_list table:get schedule station_id   
+  ;  let bus_ids [bus_id] of buses 
+  ;  
+  ;  set biggest_positions lput (position biggest p_list) biggest_passengers
+  ;  set biggest_passengers lput biggest biggest_passengers
+  ;  set found false
+  ;  set station_id (station_id + 1)  
+  ;  ;show(word "biggest " biggest)
+  ;]
+  
+  ;let p_position position(max biggest_passengers) biggest_passengers
+  ;let first_station item (p_position) biggest_positions
+  ;set new_position p_position
+  
+  ;while [first_station = item (new_position) biggest_positions][
+  ;    show(word "1st " (item (p_position) biggest_positions) "  2nd " (item (new_position) biggest_positions))
+  ;    show(word "new " new_position "  and old " p_position)
+  ;    set biggest_positions remove-item new_position biggest_positions
+  ;    set biggest_passengers remove-item new_position biggest_passengers
+  ;    set new_position position(max biggest_passengers) biggest_passengers
+  ;]
+  ;show(word "found 1st " first_station "  2nd " (item (new_position) biggest_positions))
+  ;show(word "found " new_position )  
+  ;let second_station item (new_position) biggest_positions
+  ;show(word "first " first_station " second " second_station)
+  
+  ;report s_path second_station first_station;report filter [item ? numbers = biggest] 
+  ;n-values (length numbers) [?]
 
 end  
+
+to-report check_other_paths[p_list]
+  
+  
+    ;let biggest max p_list
+    ;let new_position position biggest p_list
+    
+    ;ifelse
+    ;[
+    ;  set biggest_positions remove-item new_position p_list
+    ;  set biggest_passengers remove-item new_position biggest_passengers
+    ;][
+    
+    ;]
+    ;set i i + 1   
+  ;]
+end
 
 to check_path
   ;look at schedule
@@ -304,9 +375,9 @@ to communication
   
   ;communicate path to new buses
   foreach bus_ids [
-    if current_id != ? and table:has-key? notified_list ?[
-      show(word "notification to " ? " contains " notified_list )
+    if current_id != ? and not table:has-key? notified_list ?[
       table:put notified_list ? "notified"
+      show(word "notification to " ? " contains " notified_list )
       let message_list fput "inform" (fput "path" path)
       send-message ? message_list
       ;ask buses with [bus_id = ?] [ 
@@ -333,7 +404,7 @@ to execute-actions
     let message_ticks item 0 ?
     let sender item 1 ?
     let message item 2 ?
-    let message_actions (decode message, sender)
+    let message_actions (decode message sender)
     ;show(word "Message_ticks " message_ticks " sender "sender " message actions " message_actions " receiving " bus_id)
     ;show(word "Current passngers " current_p_station_list)
     ;foreach message_actions [
