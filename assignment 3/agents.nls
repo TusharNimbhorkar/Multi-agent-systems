@@ -148,24 +148,24 @@ end
 
 ;The people to pick up on route for drop off?
 to-report route-check [route];route = path ; use for communication
-  ;priority
-  ;let leftover route
-  ;let pickups []
-  ;foreach route[
-  ;  set leftover but-first leftover
-  ;  let stop ?
-  ;  let ps get-passengers-at-stop stop
-  ;  foreach ps[
-  ;    let p_id item 0 ?
-  ;    let p_station item 1 ?
-  ;    foreach leftover[
-  ;      if p_station = ?[
-  ;        set pickups lput p_id pickups
-  ;      ]
-  ;    ]
-  ;  ]
-  ;]
-  ;report pickups
+  let leftover route
+  let pickups table:make 
+  foreach route[
+    set leftover but-first leftover
+    let c_stop ?
+    let ps get-passengers-at-stop c_stop 
+    let pickups_stop []               foreach ps[
+      let p_id item 0 ?
+      let p_station item 1 ?
+      foreach leftover[
+        if p_station = ?[
+          set pickups_stop lput p_id pickups_stop
+        ]
+      ]
+    ]
+    table:put pickups c_stop pickups_stop
+  ]
+  report pickups
 end
 
 ;might not make sense
