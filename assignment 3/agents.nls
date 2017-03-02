@@ -23,6 +23,9 @@ buses-own [
   current_p_station_list 
   notified_list
   path_list
+  intial_path_reached
+  route_to_actual_path
+  actual_path
 ]
  
 globals [graph]
@@ -154,7 +157,8 @@ to-report route-check [route];route = path ; use for communication
     set leftover but-first leftover
     let c_stop ?
     let ps get-passengers-at-stop c_stop 
-    let pickups_stop []               foreach ps[
+    let pickups_stop []               
+    foreach ps[
       let p_id item 0 ?
       let p_station item 1 ?
       foreach leftover[
@@ -342,15 +346,29 @@ end
 
 to check_path
   ;look at schedule
+    
   if length(path) < 1 [;or path not proving to be any use 
-    set path find_route 
+    set actual_path find_route
+    set intial_path_reached false
+    set path s_path 3 (item  0 actual_path)   
   ]
+  
+   if not intial_path_reached [
+      if current_stop = item 0 actual_path [
+        set path actual_path
+        set intial_path_reached true
+        set counter 0
+      ] 
+      
+   ] 
+     
   
   show (word "current1 " current_stop " next " next_stop " prev " previous_stop)
   let tmp item counter path
     
   ifelse current_stop = tmp
   [ 
+    
     update-schedule
     set counter counter + 1 
     if counter > length(path) - 1[
@@ -398,35 +416,6 @@ to communication
   ]
 end
 
-to execute-actions
-  ; Add decision making strategies for your agents here.
-  ; You are allowed to use the global variable 'ticks'.
-  check_path
-  show(word "Path " path)
-  if (ticks mod 100) = 0 and count buses < 3
-  [add-bus 3  ]
-  
-  ;check inbox
-  foreach inbox[
-    let message_ticks item 0 ?
-    let sender item 1 ?
-    let message item 2 ?
-    let message_actions (decode message sender)
-    set inbox but-first inbox
-    
-    ;show(word "Message_ticks " message_ticks " sender "sender " message actions " message_actions " receiving " bus_id)
-    ;show(word "Current passngers " current_p_station_list)
-    ;foreach message_actions [
-    ;    let action ? 
-    ;]
-    ;decipher message
-  ] 
-  
-  communication
-  
-end
-
-
 
 ;to report
 to-report cross_p [path2]
@@ -473,5 +462,33 @@ to-report union [a b]
   let mylist remove-duplicates a
   report mylist
 
+  
+end
+
+to execute-actions
+  ; Add decision making strategies for your agents here.
+  ; You are allowed to use the global variable 'ticks'.
+  check_path
+  show(word "Path " path)
+  if (ticks mod 100) = 0 and count buses < 3
+  [add-bus 3  ]
+  
+  ;check inbox
+  foreach inbox[
+    let message_ticks item 0 ?
+    let sender item 1 ?
+    let message item 2 ?
+    let message_actions (decode message sender)
+    set inbox but-first inbox
+    
+    ;show(word "Message_ticks " message_ticks " sender "sender " message actions " message_actions " receiving " bus_id)
+    ;show(word "Current passngers " current_p_station_list)
+    ;foreach message_actions [
+    ;    let action ? 
+    ;]
+    ;decipher message
+  ] 
+  
+  communication
   
 end
