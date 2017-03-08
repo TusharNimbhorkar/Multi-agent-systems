@@ -26,6 +26,12 @@ buses-own [
   intial_path_reached
   route_to_actual_path
   actual_path
+  threshold
+  actual_passengers
+  dropped_passengers
+  passengers_seen
+  last_update_ticks
+  counter_for_vote
 ]
  
 globals [graph]
@@ -43,6 +49,10 @@ to init-buses
   set schedule table:make
   set notified_list table:make
   set path_list table:make
+  set passengers_seen 1
+  set actual_passengers 1
+  set dropped_passengers 1
+  set last_update_ticks 0
   
   ifelse bus_type = 1[
     set capacity bus_type1_capacity 
@@ -149,6 +159,7 @@ to-report s_path [start-stop end-stop]
 end
 
 
+
 ;The people to pick up on route for drop off?
 to-report route-check [route];route = path ; use for communication
   let leftover route
@@ -180,33 +191,65 @@ to encode [action message]
   
 end
 
-to-report decode[message sender]
+to decode
   ;inform
- 
   ;enquire
   ;request
-  let actions []
-  let action item 0 message
-  if action = "inform"[
-    set actions remove-item 0 message
-    set action item 0 message
-    ifelse action = "Passngers"[
-      set actions remove-item 0 message;need to indicate that this is to do with passngers
-      ;pass to sub method that carries out these actions
-    ][;path
-      set actions remove-item 0 message;
-      table:put path_list sender actions
-      set actions but-first actions
-      ;show(word "actions" actions)
-      let returned_list []
-      set returned_list cross_p actions
-      show(word"--------------path" path "---------------action" actions)
-      show(word "------------------RETURNED LIST" returned_list)
+  let vote_count []
+  let vote_start false
+  
+  foreach inbox[
+    let message_ticks item 0 ?
+    let message item 2 ?
+    let sender item 1 ?
+    let actions []
+    let action item 0 message
     
-    ]  
-    ;set actions message
+    ifelse action = "inform"[
+      set actions remove-item 0 message
+      set action item 0 message
+      ifelse action = "Passengers"[
+        set actions remove-item 0 message;need to indicate that this is to do with passngers
+                                         ;pass to sub method that carries out these actions
+      ][;path
+        set actions remove-item 0 message;
+        table:put path_list sender actions
+        set actions but-first actions
+        ;show(word "actions" actions)
+        let returned_list []
+        set returned_list cross_p actions
+      ]  
+      ;set actions message
+    ][
+      if action = "vote"[
+        set actions remove-item 0 message;
+        set action item 0 message
+        ifelse action = "propose_bus"[
+          if not vote_start[;vote already begun
+            set vote_start true
+            ifelse threshold < 0.6[
+              ifelse bus_type < 3[
+                send-message sender (list "vote" "returned" (bus_id + 1))
+              ][ send-message sender (list "vote" "returned" (3))]
+            ][
+            send-message sender (list "vote" "returned" bus_id)
+            ]
+          ]
+        ][
+            if action = "returned"[
+               set actions remove-item 0 message;
+               set action item 0 message
+               set vote_count lput action vote_count
+            ]
+        ]
+      ]
+    ]
+    
+    if length(vote_count) > 0[
+       add-bus (modes vote_count)
+    ] 
+    set inbox but-first inbox 
   ]
-  report actions
 end
 
 to check_passengers
@@ -293,55 +336,6 @@ to-report find_route
   ;no path found that wasn't taken
    report s_path (item 0 (item 0 sorted_list)) (item 1 (item 0 sorted_list ))
   
-  
-  ;while[station_id != 24]
-  ;[ 
-  ;  let p_list table:get schedule station_id   
-  ;  let bus_ids [bus_id] of buses 
-  ;  
-  ;  set biggest_positions lput (position biggest p_list) biggest_passengers
-  ;  set biggest_passengers lput biggest biggest_passengers
-  ;  set found false
-  ;  set station_id (station_id + 1)  
-  ;  ;show(word "biggest " biggest)
-  ;]
-  
-  ;let p_position position(max biggest_passengers) biggest_passengers
-  ;let first_station item (p_position) biggest_positions
-  ;set new_position p_position
-  
-  ;while [first_station = item (new_position) biggest_positions][
-  ;    show(word "1st " (item (p_position) biggest_positions) "  2nd " (item (new_position) biggest_positions))
-  ;    show(word "new " new_position "  and old " p_position)
-  ;    set biggest_positions remove-item new_position biggest_positions
-  ;    set biggest_passengers remove-item new_position biggest_passengers
-  ;    set new_position position(max biggest_passengers) biggest_passengers
-  ;]
-  ;show(word "found 1st " first_station "  2nd " (item (new_position) biggest_positions))
-  ;show(word "found " new_position )  
-  ;let second_station item (new_position) biggest_positions
-  ;show(word "first " first_station " second " second_station)
-  
-  ;report s_path second_station first_station;report filter [item ? numbers = biggest] 
-  ;n-values (length numbers) [?]
-
-end  
-
-to-report check_other_paths[p_list]
-  
-  
-    ;let biggest max p_list
-    ;let new_position position biggest p_list
-    
-    ;ifelse
-    ;[
-    ;  set biggest_positions remove-item new_position p_list
-    ;  set biggest_passengers remove-item new_position biggest_passengers
-    ;][
-    
-    ;]
-    ;set i i + 1   
-  ;]
 end
 
 to check_path
@@ -361,14 +355,11 @@ to check_path
       ] 
       
    ] 
-     
   
-  show (word "current1 " current_stop " next " next_stop " prev " previous_stop)
   let tmp item counter path
     
   ifelse current_stop = tmp
   [ 
-    
     update-schedule
     set counter counter + 1 
     if counter > length(path) - 1[
@@ -394,7 +385,7 @@ to check_path
   ]
 end
 
-to communication
+to communicate_paths
   let current_id bus_id
   let bus_ids [bus_id] of buses
   
@@ -448,6 +439,22 @@ to-report cross_p [path2]
   report empty_list]
 end
 
+to-report calculate_route_type
+  ;0-4 
+  set last_update_ticks last_update_ticks + 1
+  if (last_update_ticks mod 50) = 0 ;define based on time
+  [
+    let passenger_sum 0
+    foreach path
+    [ 
+      
+    ]
+    ;how many passngers do I have left
+    ;for 
+    set last_update_ticks 0
+    
+  ]
+end
 
 to-report intersect [a b]
    report (filter [ member? ? b ] a)
@@ -455,40 +462,50 @@ end
 
 
 to-report union [a b]
-  
-  
   foreach b [ set a lput ? a ]
-  
   let mylist remove-duplicates a
   report mylist
+ end
 
-  
+to check_threshold
+  ifelse(last_update_ticks mod 20) = 0
+  [
+    ;check capacity too
+    set threshold dropped_passengers / passengers_seen
+    set passengers_seen 1
+    set actual_passengers 1
+    set dropped_passengers 1
+    set last_update_ticks 0
+  ][
+    set last_update_ticks last_update_ticks + 1 
+  ]
 end
 
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
   check_path
-  show(word "Path " path)
-  if (ticks mod 100) = 0 and count buses < 3
-  [add-bus 3  ]
+  check_threshold
+  if threshold < 0.6 [
+    let current_id bus_id
+    let bus_ids [bus_id] of buses
+    
+    ;communicate path to new buses
+    foreach bus_ids [
+        let message_list fput "vote" (fput "add_bus" (list threshold))
+        send-message ? message_list
+    ]
+    set threshold 1
+    set last_update_ticks 0
+  ]
+  ;show(word "Path " path)
+  ;if (ticks mod 10) = 0 and count buses < 3
+  ;[add-bus 3  ]
   
   ;check inbox
-  foreach inbox[
-    let message_ticks item 0 ?
-    let sender item 1 ?
-    let message item 2 ?
-    let message_actions (decode message sender)
-    set inbox but-first inbox
-    
-    ;show(word "Message_ticks " message_ticks " sender "sender " message actions " message_actions " receiving " bus_id)
-    ;show(word "Current passngers " current_p_station_list)
-    ;foreach message_actions [
-    ;    let action ? 
-    ;]
-    ;decipher message
-  ] 
+  let vote_activated false
+  decode 
   
-  communication
+  communicate_paths
   
 end
