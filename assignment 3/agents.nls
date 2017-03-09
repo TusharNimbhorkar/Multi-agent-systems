@@ -481,6 +481,107 @@ to check_threshold
   ]
 end
 
+
+
+
+;/////////////////////////dropoff pick up////////////////////////////////////////////////////
+
+
+
+
+
+to-report pick_something [path_2]
+  
+  
+  let ret_l []
+  set ret_l cross_p path_2
+  
+  let intersect_p []
+  set intersect_p item 0 ret_l 
+  
+  let union_l []
+  set union_l item 1 ret_l
+  
+  set passengers_seen paseengers_seen + 1
+  
+  
+    ;let stop_c ?
+    
+    let passenger_list (get-passengers-at-stop current_stop)
+    let passenger_counter 0
+    let cap_check false
+    
+    
+    while [passenger_counter < length(passenger_list) and cap_check = false][ 
+      let bus_passenger_length (length bus_passengers)
+      let passenger item passenger_counter passenger_list 
+      let id item 0 passenger  ;item 0 ?
+      let p_station item 1 passenger ;item 1 ?
+      let x_t (list p_station)
+      let reduced_list intersect x_t union_l
+         
+      let current_amount 0
+      
+      
+      
+      if length(reduced_list) > 0 and length (intersect_p) > 0 and not member? p_station intesect_p and member? p_station union_l[
+      ifelse bus_passenger_length < (capacity) [ 
+        
+        ;set current_amount (item p_station current_p_station_list ) + 1 
+        ;set current_p_station_list replace-item p_station current_p_station_list current_amount
+        
+        ;foreach
+        
+        pick-up-passenger id
+      ][
+      set cap_check true
+      ]
+      set passenger_counter passenger_counter + 1
+    ]
+      ]
+    
+    
+    
+    
+    
+  
+  ;let passenger_list_temp 
+  
+end
+
+
+to drop_somehting
+  
+  foreach bus_passengers [
+      let id item 0 ?
+      let p_station item 1 ?  
+      if current_stop = p_station [
+        drop-off-passenger id
+        let current_amount ( ( item p_station current_p_station_list ) - 1 )
+        set current_p_station_list ( replace-item p_station current_p_station_list current_amount )
+      ]
+      
+      if current_stop = cross_station and member? p_station path2 [
+        
+        drop-off-passenger id
+        let current_amount ( ( item p_station current_p_station_list ) - 1 )
+        set current_p_station_list ( replace-item p_station current_p_station_list current_amount )
+        ]
+      
+    ] 
+  
+  
+end
+
+
+;//////////////////////////////////end drop off end pickup///////////////////////////
+
+
+
+
+
+
+
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
