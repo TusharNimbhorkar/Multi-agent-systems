@@ -30,7 +30,7 @@ buses-own [
   actual_passengers
   dropped_passengers
   passengers_seen
-  last_update_ticks
+  runs
   counter_for_vote
 ]
  
@@ -52,7 +52,8 @@ to init-buses
   set passengers_seen 1
   set actual_passengers 1
   set dropped_passengers 1
-  set last_update_ticks 0
+  set runs 0
+  set threshold 1
   
   ifelse bus_type = 1[
     set capacity bus_type1_capacity 
@@ -197,19 +198,20 @@ to decode
   ;request
   let vote_count []
   let vote_start false
-  
+  ;show(word "Getting messages")
   foreach inbox[
+    
     let message_ticks item 0 ?
     let message item 2 ?
     let sender item 1 ?
     let actions []
     let action item 0 message
-    
+    ;show(word "message " message)
     ifelse action = "inform"[
       set actions remove-item 0 message
       set action item 0 message
       ifelse action = "Passengers"[
-        set actions remove-item 0 message;need to indicate that this is to do with passngers
+         set actions remove-item 0 message;need to indicate that this is to do with passngers
                                          ;pass to sub method that carries out these actions
       ][;path
         set actions remove-item 0 message;
@@ -220,33 +222,80 @@ to decode
         set returned_list cross_p actions
       ]  
       ;set actions message
-    ][
-      if action = "vote"[
-        set actions remove-item 0 message;
-        set action item 0 message
-        ifelse action = "propose_bus"[
-          if not vote_start[;vote already begun
-            set vote_start true
-            ifelse threshold < 0.6[
-              ifelse bus_type < 3[
-                send-message sender (list "vote" "returned" (bus_id + 1))
-              ][ send-message sender (list "vote" "returned" (3))]
-            ][
-            send-message sender (list "vote" "returned" bus_id)
+    ][ show(word "Vote")
+       if action = "Vote"[
+          set message remove-item 0 message;
+          set action item 0 message
+          show(word "action1 " action)
+          ifelse action = "propose_bus"[
+             show(word "propose_bus action")
+             if not vote_start[;vote already begun
+               show(word "starting_vote")
+               show(word "threshold" threshold)
+               set vote_start true
+               if threshold < 0.6[
+                 show(word "sending vote" )
+                 ;ifelse bus_type < 3[
+                 send-message sender (list "Vote" "returned" (bus_type) (passengers_seen - dropped_passengers / capacity) )
+               ]
+             ]
+          ][
+            if action = "returned"[
+              show ("returned ------------------------------------")
+              set message remove-item 0 message;
+              let sender_bus_type item 0 message
+              set message remove-item 0 message;
+              let value item 0 message
+              
+              ifelse sender_bus_type = 1 [
+                ifelse value > 15[
+                  set vote_count lput 3 vote_count
+                ][ 
+                  ifelse value > 10 [
+                    set vote_count lput 2 vote_count
+                  ][
+                    if value > 5 [
+                      set vote_count lput 1 vote_count 
+                    ]
+                  ]
+                ]
+              ][
+                ifelse sender_bus_type = 2 [
+                  ifelse value > 10[
+                    set vote_count lput 3 vote_count
+                  ][ 
+                    ifelse value > 5 [
+                      set vote_count lput 2 vote_count
+                    ][
+                      if value > 2 [
+                        set vote_count lput 1 vote_count 
+                      ]
+                    ]  
+                  ]
+                ][
+                  ;sdf
+                  ifelse value > 5[
+                    set vote_count lput 3 vote_count
+                  ][ 
+                    ifelse value > 2 [
+                      set vote_count lput 2 vote_count
+                    ][
+                      if value > 1 [
+                        set vote_count lput 1 vote_count 
+                      ]
+                    ]  
+                  ]
+                ]
+              ]
             ]
           ]
-        ][
-            if action = "returned"[
-               set actions remove-item 0 message;
-               set action item 0 message
-               set vote_count lput action vote_count
-            ]
-        ]
-      ]
+       ]  
     ]
     
     if length(vote_count) > 0[
-       add-bus (modes vote_count)
+      ;check if majority want voyte
+      show(word "Vote: choosing: " modes vote_count)
+      add-bus item 0 (modes vote_count) ; check if this majority
     ] 
     set inbox but-first inbox 
   ]
@@ -302,7 +351,7 @@ to-report find_route
   show (word "sorted_list " sorted_list)
   set sorted_list (sort-by [item 2 ?1 > item 2 ?2] sorted_list)
   let sort_counter 0
-  let bus_ids (list buses)
+  let bus_ids [bus_id] of buses
   
   while[sort_counter < length(sorted_list)][
     let potential_path item sort_counter sorted_list
@@ -365,21 +414,30 @@ to check_path
     if counter > length(path) - 1[
       set path reverse path
       set counter 1
+      set runs runs + 1
+      if runs = 2[
+        set runs 0
+        check_threshold
+      ]
     ]
     ;set counter ( counter + 1 ) mod length(path)
     set next_stop item counter path  
     
+    
+    dropoff_passengers
+    pickup_passengers
     ;drop off passengers
-    foreach bus_passengers [
-      let id item 0 ?
-      let p_station item 1 ?  
-      if current_stop = p_station [
-        drop-off-passenger id
-        let current_amount ( ( item p_station current_p_station_list ) - 1 )
-        set current_p_station_list ( replace-item p_station current_p_station_list current_amount )
-      ]
-    ] 
-    check_passengers
+    ;foreach bus_passengers [
+    ;  let id item 0 ?
+    ;  let p_station item 1 ?  
+    ;  if current_stop = p_station [
+    ;    drop-off-passenger id
+    ;    let current_amount ( ( item p_station current_p_station_list ) - 1 )
+    ;    set current_p_station_list ( replace-item p_station current_p_station_list current_amount )
+    ;  ]
+    ;] 
+    
+    ;check_passengers
   ][
     travel-to tmp
   ]
@@ -393,7 +451,6 @@ to communicate_paths
   foreach bus_ids [
     if current_id != ? and not table:has-key? notified_list ?[
       table:put notified_list ? "notified"
-      show(word "notification to " ? " contains " notified_list )
       let message_list fput "inform" (fput "path" path)
       send-message ? message_list
       ;ask buses with [bus_id = ?] [ 
@@ -441,19 +498,19 @@ end
 
 to-report calculate_route_type
   ;0-4 
-  set last_update_ticks last_update_ticks + 1
-  if (last_update_ticks mod 50) = 0 ;define based on time
-  [
-    let passenger_sum 0
-    foreach path
-    [ 
+  ;let last_update_ticks last_update_ticks + 1
+  ;if (last_update_ticks mod 50) = 0 ;define based on time
+  ;[
+    ;let passenger_sum 0
+    ;foreach path
+    ;[ 
       
-    ]
+    ;]
     ;how many passngers do I have left
     ;for 
-    set last_update_ticks 0
+    ;set last_update_ticks 1
     
-  ]
+  ;]
 end
 
 to-report intersect [a b]
@@ -468,17 +525,70 @@ to-report union [a b]
  end
 
 to check_threshold
-  ifelse(last_update_ticks mod 20) = 0
-  [
-    ;check capacity too
-    set threshold dropped_passengers / passengers_seen
+    set threshold (dropped_passengers + capacity)/ actual_passengers
+    show (word "threshold "  threshold)
+    show (word "dropped " dropped_passengers)
+    show (word "capacity " capacity)
+    show (word "actual " actual_passengers)
+    show(word "seen " passengers_seen)
+    show(word "new bus " (passengers_seen - dropped_passengers / capacity)) 
+    ;if threshold is one or above to easy begin to shift route
+    
+    if (passengers_seen - dropped_passengers / capacity) > 4[
+         show (word "vote time " (passengers_seen - dropped_passengers / capacity))
+         let message_list fput "Vote" (fput "propose_bus" (list threshold))
+         send-message bus_id (list "Vote" "returned" (bus_type) (passengers_seen - dropped_passengers / capacity) )
+    ]
+    
+    ifelse threshold >= 1.7 [;this doesn't account for current passengers
+      ;find new route
+      show ("finding_new_route")
+      show(word "old_path " path)
+      set actual_path find_route
+      set intial_path_reached false
+      set path s_path current_stop (item  0 actual_path)
+      set counter 0
+      show(word "new_path " actual_path)
+      ;categorise route
+      ;communicate swap
+      
+    ][;less than 1 
+       ;need another bus vote for help
+       if (actual_passengers / passengers_seen) < 0.7[
+         let message_list fput "Vote" (fput "propose_bus" (list threshold))
+         send-message bus_id (list "Vote" "returned" (bus_type) (passengers_seen - dropped_passengers / capacity) )
+         ;add-bus 2
+       ]
+    ]
+    
     set passengers_seen 1
     set actual_passengers 1
     set dropped_passengers 1
-    set last_update_ticks 0
-  ][
-    set last_update_ticks last_update_ticks + 1 
-  ]
+    
+  ;  show(word "Ohh my threshold is: " threshold)
+  ;if threshold < 0.6 [
+  ;  show(word "Broken my threshold")
+  ;  let current_id bus_id
+  ;  let bus_ids [bus_id] of buses
+    
+    ;communicate path to new buses
+  ;   ifelse length(bus_ids) > 1[
+  ;     show(word "starting vote, free the people")
+  ;     foreach bus_ids [
+  ;       if bus_id != ?[
+  ;         if table:has-key? path_list ? [
+  ;           show(word "sending vote to " ? " ----------------------------")
+  ;           let message_list fput "Vote" (fput "propose_bus" (list threshold))
+  ;           show(word "message " message_list)
+  ;           send-message ? message_list
+  ;         ]
+  ;       ]
+  ;      ]
+  ;   ][ add-bus 3 ];define better system]
+  ;  set threshold 1
+  ;]
+    ;else if threshold is too low failing miserably on route
+    ;show(word "Smack my threshold up: " threshold)
 end
 
 
@@ -486,89 +596,117 @@ end
 
 ;/////////////////////////dropoff pick up////////////////////////////////////////////////////
 
-
-
-
-
-to-report pick_something [path_2]
-  
-  
-  let ret_l []
-  set ret_l cross_p path_2
-  
-  let intersect_p []
-  set intersect_p item 0 ret_l 
+to pickup_passengers
   
   let union_l []
-  set union_l item 1 ret_l
+  ;let stop_c ?
   
-  set passengers_seen paseengers_seen + 1
-  
-  
-    ;let stop_c ?
+  let passenger_list (get-passengers-at-stop current_stop)
+  let passenger_counter 0
+  let cap_check false
+  set passengers_seen passengers_seen + length(passenger_list)
     
-    let passenger_list (get-passengers-at-stop current_stop)
-    let passenger_counter 0
-    let cap_check false
-    
-    
-    while [passenger_counter < length(passenger_list) and cap_check = false][ 
-      let bus_passenger_length (length bus_passengers)
-      let passenger item passenger_counter passenger_list 
-      let id item 0 passenger  ;item 0 ?
-      let p_station item 1 passenger ;item 1 ?
-      let x_t (list p_station)
-      let reduced_list intersect x_t union_l
-         
-      let current_amount 0
+  while [passenger_counter < length(passenger_list) and cap_check = false][
+    let bus_passenger_length (length bus_passengers)
+    let passenger item passenger_counter passenger_list 
+    let id item 0 passenger  ;item 0 ?
+    let p_station item 1 passenger ;item 1 ?
+    let x_t (list p_station)
+    let reduced_list intersect x_t union_l
+    let current_amount 0   
+    let intersects []
+    let bus_ids [bus_id] of buses
+    let bus_id_counter 0
+     
+    ;skip if normal passengers
+    ;show(word "Current Stop " current_stop " -------------------")
+    ;get passengers stop
+    ifelse member? p_station path [
       
-      
-      
-      if length(reduced_list) > 0 and length (intersect_p) > 0 and not member? p_station intesect_p and member? p_station union_l[
       ifelse bus_passenger_length < (capacity) [ 
-        
-        ;set current_amount (item p_station current_p_station_list ) + 1 
-        ;set current_p_station_list replace-item p_station current_p_station_list current_amount
-        
-        ;foreach
-        
+        ;add metric for these cunts  
         pick-up-passenger id
+        set actual_passengers actual_passengers + 1
       ][
-      set cap_check true
+        set cap_check true
       ]
-      set passenger_counter passenger_counter + 1
+    ][
+     ;show("Here2")
+     while[bus_id_counter < length(bus_ids)][
+        if bus_id != item bus_id_counter bus_ids and table:has-key? path_list item bus_id_counter bus_ids[ 
+          let foreign_path table:get path_list item bus_id_counter bus_ids
+          if member? p_station foreign_path[ 
+            set intersects lput (item 0 cross_p foreign_path) intersects; check for duplicates? no need?
+            set union_l lput (item 1 cross_p foreign_path) union_l
+          ]
+        ]
+        set bus_id_counter bus_id_counter + 1
+      ]
+      
+      if (length(intersects) > 0 and not member? current_stop intersects) [
+        ifelse bus_passenger_length < (capacity) [ 
+          ;add metric for these cunts  
+          pick-up-passenger id
+        ][
+           set cap_check true
+        ]
+      ]
     ]
-      ]
+    set passenger_counter passenger_counter + 1
+  ]    
     
-    
-    
-    
-    
-  
   ;let passenger_list_temp 
   
 end
 
+to-report get_intersections
+  let bus_ids [bus_id] of buses
+  let intersections []
+  foreach bus_ids [
+    
+  ]
+end
 
-to drop_somehting
-  
+to dropoff_passengers
+  ;show(word "Passengers length" length(bus_passengers))
   foreach bus_passengers [
       let id item 0 ?
       let p_station item 1 ?  
-      if current_stop = p_station [
+       
+      ifelse current_stop = p_station [ ; ot member? p_station intersect_p
         drop-off-passenger id
+        set dropped_passengers dropped_passengers + 1
         let current_amount ( ( item p_station current_p_station_list ) - 1 )
         set current_p_station_list ( replace-item p_station current_p_station_list current_amount )
-      ]
+      ][
       
-      if current_stop = cross_station and member? p_station path2 [
-        
-        drop-off-passenger id
-        let current_amount ( ( item p_station current_p_station_list ) - 1 )
-        set current_p_station_list ( replace-item p_station current_p_station_list current_amount )
-        ]
-      
-    ] 
+         ;set cross_station ;cross_p table:get path_lists 
+         ;loop buses
+         ;get all intersects that passnger is on
+         ;if current stop is in intersect list deop thew fucker
+         let bus_ids [bus_id] of buses
+         ;show(word "buses " bus_ids)
+         let bus_id_counter 0
+         let intersects []
+         while[bus_id_counter < length(bus_ids)][
+           ;show(word "me:" bus_id " you:" item bus_id_counter bus_ids)
+           if bus_id != item bus_id_counter bus_ids and table:has-key? path_list item bus_id_counter bus_ids[ 
+             let foreign_path table:get path_list item bus_id_counter bus_ids
+             if member? p_station foreign_path[ 
+               set intersects lput (item 0 cross_p foreign_path) intersects; check for duplicates? no need?
+             ]
+           ]
+           set bus_id_counter bus_id_counter + 1
+         ]
+         
+         if member? current_stop intersects[
+           set dropped_passengers dropped_passengers + 1
+           drop-off-passenger id
+           let current_amount ( ( item p_station current_p_station_list ) - 1 )
+           set current_p_station_list ( replace-item p_station current_p_station_list current_amount )
+         ]
+      ] 
+ ] 
   
   
 end
@@ -576,37 +714,21 @@ end
 
 ;//////////////////////////////////end drop off end pickup///////////////////////////
 
-
-
-
-
-
-
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
+  ;show(word "Bus bitches " bus_passengers)
+  
+  
   check_path
-  check_threshold
-  if threshold < 0.6 [
-    let current_id bus_id
-    let bus_ids [bus_id] of buses
-    
-    ;communicate path to new buses
-    foreach bus_ids [
-        let message_list fput "vote" (fput "add_bus" (list threshold))
-        send-message ? message_list
-    ]
-    set threshold 1
-    set last_update_ticks 0
-  ]
   ;show(word "Path " path)
   ;if (ticks mod 10) = 0 and count buses < 3
   ;[add-bus 3  ]
   
   ;check inbox
-  let vote_activated false
+  ;let vote_activated false
   decode 
   
-  communicate_paths
+  communicate_paths; communicate pathsif path is changing 
   
 end
