@@ -105,6 +105,28 @@ to update-schedule
   ;show (word schedule)
 end
 
+
+to-report s_i_path [start_stop inter_stops end_stop]
+  let result_list (list)
+  let prev_stop start_stop
+  foreach inter_stops
+  [
+    foreach (s_path prev_stop ?1)
+    [
+      set result_list lput ? result_list  
+    ]
+    ;remove last elements to avoid duplicates 
+    set result_list (remove-item ((length result_list) - 1) result_list )
+    set prev_stop ?1
+  ]
+  foreach (s_path prev_stop end_stop)
+  [
+      set result_list lput ? result_list  
+  ]
+  report result_list
+end
+
+
 ;djikstra
 
 to-report s_path [start-stop end-stop]
