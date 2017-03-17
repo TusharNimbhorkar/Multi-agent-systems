@@ -73,9 +73,10 @@ to init-buses
      ]
   ]
   
-  if length [bus_id] of buses > 3[
+  if length ([bus_id] of buses) > 3[
     let bus_ids [bus_id] of buses
     ;communicate path to new buses
+    show("Here --------------------------------------------------------------")
     foreach bus_ids [
       let message_list (list "bid" "init")
       ; send-message ? message_list
@@ -233,7 +234,21 @@ to-report route-check [route];route = path ; use for communication
 end
 
 ;might not make sense
-to encode [action message] 
+to-report get_og_passengers [passengers_list og_path] 
+  let foreign_passengers table:make
+  foreach passengers_list [ 
+    let id item 0 ?
+    let p_station item 1 ?
+    if  not (member? p_station og_path) [
+    ;set foreign_passngers lput ? foreign_passengers  
+      ifelse table:has-key? foreign_passengers p_station [
+        table:put foreign_passengers p_station 1 
+      ][
+      table:put foreign_passengers p_station (1 + (table:get foreign_passengers p_station))
+      ]
+    ]
+  ]
+  report foreign_passengers
   ;inform
   ;enquire
   ;request
@@ -288,7 +303,8 @@ to decode
                if threshold < 0.6[
                  ;show(word "sending vote" )
                  ;ifelse bus_type < 3[
-                 send-message sender (list "Vote" "returned" (bus_type) ((passengers_seen - dropped_passengers) / capacity)) 
+                 ;send passenger listing of foerign pass
+                 send-message sender (list "Vote" "returned" (bus_type) ((passengers_seen - dropped_passengers) / capacity) (get_og_passengers bus_passengers actual_path)) 
                ]
              ]
           ][
@@ -339,36 +355,44 @@ to decode
                   ]
                 ]
               ]
+              set message remove-item 0 message;
+              set value item 0 message ;bid for path
+              let overall_passenger_listing table:make
+              foreach table:keys value [
+                 ifelse table:has-key? overall_passenger_listing (?) [
+                   table:put overall_passenger_listing ? (table:get overall_passenger_listing ?) + (table:get value ?)
+                 ][
+                   table:put overall_passenger_listing ? (table:get value ?)
+                 ]
+              ]
             ]
+            
           ]
        ]
-       if action = "bid"[
-          set message remove-item 0 message;
-          set action item 0 message
-          ;show(word "action1 " action)
-          ifelse action = "init"[
-            if not vote_start[
-              set vote_start true
-              send-message sender (list "bid" "returned" path ((passengers_seen - dropped_passengers) / capacity)) 
-            ]
-          ]
-          [
-            if action = "returned"[
-              set message remove-item 0 message;
-              let route item 0 message
-              set message remove-item 0 message;
-              let value item 0 message
-              
-              set pos_routes fput route pos_routes
-              set bids fput value bids
-              
-              
-              
-            ]
-          ]
-       ]
+       ;if action = "bid"[
+       ;   set message remove-item 0 message;
+       ;   set action item 0 message
+       ;   ;show(word "action1 " action)
+       ;   ifelse action = "init"[
+       ;;     if not vote_start[
+       ;       set vote_start true ;should be bid start?
+       ;       send-message sender (list "bid" "returned" path ((passengers_seen - dropped_passengers) / capacity)) 
+       ;     ]
+       ;   ]
+       ;   [
+       ;     if action = "returned"[
+       ;       set message remove-item 0 message;
+       ;;       let route item 0 message
+       ;       set message remove-item 0 message;
+       ;       let value item 0 message
+       ;       
+       ;       set pos_routes fput route pos_routes
+       ;       set bids fput value bids         
+       ;     ]
+       ;   ]
+       ;]
     ]
-
+    
     set inbox but-first inbox 
   ]
     if length(vote_count) > 0[
@@ -377,12 +401,11 @@ to decode
       add-bus item 0 (modes vote_count) ; check if this majority
     ] 
     
-    if length bids > 0[
-      let winner item position max bids bids pos_routes
-      set path winner
-      
-      
-    ]
+    ;if length bids > 0[
+    ;  show(word " max bids " (max bids) " position " (position (max bids) bids) " winner " (item (position (max bids) bids) pos_routes))
+    ;  let winner item (position (max bids) bids) pos_routes
+    ;  set path winner      
+    ;]
 
 end
 
