@@ -73,6 +73,15 @@ to init-buses
      ]
   ]
   
+  if length [bus_id] of buses > 3[
+    let bus_ids [bus_id] of buses
+    ;communicate path to new buses
+    foreach bus_ids [
+      let message_list (list "bid" "init")
+      ; send-message ? message_list
+    ]
+  ]
+  
   update-schedule
 end
 
@@ -237,6 +246,9 @@ to decode
   ;request
   let vote_count []
   let vote_start false
+  let bid_start false
+  let pos_routes []
+  let bids []
   ;show(word "Getting messages")
   foreach inbox[
     
@@ -329,16 +341,49 @@ to decode
               ]
             ]
           ]
-       ]  
+       ]
+       if action = "bid"[
+          set message remove-item 0 message;
+          set action item 0 message
+          ;show(word "action1 " action)
+          ifelse action = "init"[
+            if not vote_start[
+              set vote_start true
+              send-message sender (list "bid" "returned" path ((passengers_seen - dropped_passengers) / capacity)) 
+            ]
+          ]
+          [
+            if action = "returned"[
+              set message remove-item 0 message;
+              let route item 0 message
+              set message remove-item 0 message;
+              let value item 0 message
+              
+              set pos_routes fput route pos_routes
+              set bids fput value bids
+              
+              
+              
+            ]
+          ]
+       ]
     ]
-    
+
+    set inbox but-first inbox 
+  ]
     if length(vote_count) > 0[
       ;check if majority want voyte
       ;show(word "Vote: choosing: " modes vote_count)
       add-bus item 0 (modes vote_count) ; check if this majority
     ] 
-    set inbox but-first inbox 
-  ]
+    
+    if length bids > 0[
+      let winner item position max bids bids pos_routes
+      set path winner
+      
+      
+    ]
+
 end
 
 to check_passengers
